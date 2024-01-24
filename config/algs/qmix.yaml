@@ -4,7 +4,7 @@
 action_selector: "epsilon_greedy"
 epsilon_start: 1.0
 epsilon_finish: 0.1
-epsilon_anneal_time: 100000 # 500000 for 6h_vs_8z 100000
+epsilon_anneal_time: 300000 # 500000 for 6h_vs_8z 100000
 
 runner: "episode"
 batch_size_run: 1 # batch_size_run=4, buffer_size = 2500, batch_size=64  for 3s5z_vs_3s6z
@@ -46,4 +46,4 @@ per_alpha: 0.6
 per_beta: 0.4
 return_priority: False
 
-name: "baidu_with_gpt4subtopic"
+name: "baidu_with_subtopic"
