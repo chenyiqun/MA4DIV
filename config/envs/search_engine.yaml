@@ -1,0 +1,21 @@
+
+env: search_engine
+
+test_greedy: True
+test_nepisode: 1
+test_interval: 50000
+log_interval: 1000
+runner_log_interval: 1000
+learner_log_interval: 1000
+t_max: 50000
+
+sparse_reward: False
+weight_decay: 0
+
+env_args:
+  map_name: search_engine
+  N_agent: 15
+  M_score: 15
+  alpha: 0.5
+
+
