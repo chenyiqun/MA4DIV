@@ -1,12 +1,24 @@
 # MA4DIV
 This is the code of MA4DIV which is a reinforcement learning approach for search result diversification. The framework of this project is based on https://github.com/hijkzzz/pymarl2.
 
-## Run an experiment
+## Run an Experiment
 ```
 python main.py --config=qmix --env-config=search_engine
 ```
 
-## data case
+## Hyperparameters
+Some hyperparameters can be edited in the file of:
+```
+./config/envs/search_engine.yaml
+```
+
+## Data Loading Path
+The data path can be edited in the file of:
+```
+./runners/episode_runner.py
+```
+
+## Data Case
 The indexes of queries and documents in the DU-DIV are shown in:
 ```
 ./data/baidu/query_doc_subtopics_doc15_2.json
