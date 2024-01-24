@@ -18,24 +18,8 @@ class Search(MultiAgentEnv):
             subtopics_list = []
             for doc_id, sub in v.items():
                 subtopics_list.extend(sub)
-            subtopics_set = set(subtopics_list)  # 去重
+            subtopics_set = set(subtopics_list)
             self.query_subtopics[query_id] = len(subtopics_set)  # {'66': 3, '133': 5, ...}
-
-        # # 创建一个文件
-        # with open("subtopics_permutation.txt", "w") as file:
-        #     pass
-        
-        # for key, value in self.dictQueryPermutaion.items():
-        #     sub_docs = self.dictQueryDocumentSubtopics[key].keys()
-        #     for doc in value['permutation']:
-        #         if doc not in sub_docs:
-        #             with open("subtopics_permutation.txt", "a") as file:
-        #                 file.write(key + ' ' + doc + ' 不存在。' + "\n")
-        #             # print(key + ' ' + doc + ' 不存在。')
-        #         else:
-        #             with open("subtopics_permutation.txt", "a") as file:
-        #                 file.write(key + ' ' + doc + ' ' + str(len(self.dictQueryDocumentSubtopics[key][doc])) + "\n")
-        #             # print(key, doc, len(self.dictQueryDocumentSubtopics[key][doc]))
 
         self.dictDCG = copy.deepcopy(self.dictQueryPermutaion)
         for key, value in self.dictDCG.items():
@@ -46,27 +30,22 @@ class Search(MultiAgentEnv):
                 doc = ideal_docs[i]
                 temp_dic[doc] = all_num - i
             self.dictDCG[key] = temp_dic
-        #     for doc in ideal_docs:
-        #         temp_dic[doc]
-        #         self.dictDCG[key]['ideal_rank'] = list(range(len(self.dictDCG[key]['permutation'])))
-        # del self.dictDCG['permutation']
-
-        # 智能体相关
+        
+        # agent number
         self.n_agents = N_agent
 
-        # 打分跨度，即{0, 1, 2, 3, ..., M_score-1}
-        self.m_score = M_score  # 此参数作为超参，可等于2倍N_agent，后期可调参。越细化平分也许越少，排序越精确。
+        # {0, 1, 2, 3, ..., M_score-1}
+        self.m_score = M_score
 
         # observations and state
         self.query_doc_dims = 1024
-        # self.obs_size = self.query_dims + self.n_agents * self.doc_dims # + self.n_agents * self.m_score + self.n_agents * self.n_agents  # query + N docs + N actions + N ranks
-        self.obs_size = self.query_doc_dims + self.query_doc_dims # + self.n_agents * self.m_score + self.n_agents * self.n_agents  # query + docs + N actions + N ranks
-        self.state_size = self.query_doc_dims + self.n_agents * self.query_doc_dims  # query + N docs
+        self.obs_size = self.query_doc_dims + self.query_doc_dims
+        self.state_size = self.query_doc_dims + self.n_agents * self.query_doc_dims
 
         # action
-        self.n_actions = self.m_score  # 动作空间维度即打分跨度。
+        self.n_actions = self.m_score
 
-        # 其他
+        # others
         self.episode_limit = 1
         self.all_step = 0
         self.alpha = alpha
@@ -79,26 +58,15 @@ class Search(MultiAgentEnv):
         self.last_alpha_NDCG = 0
 
     def get_rank(self, scores_list, doc_ids):
-        # 假设 doc_ids 是你的文档 ID 列表，scores 是 PyTorch tensor 存储的得分
-        # 使用 zip 打包 doc_ids 和 scores_list，然后使用 sorted 函数进行排序
         sorted_pairs = sorted(zip(doc_ids, scores_list), key=lambda x: x[1], reverse=True)
 
-        # 解压排序后的 pairs，获取排序后的 doc_ids
         sorted_doc_ids, sorted_scores = zip(*sorted_pairs)
 
-        # 转换为 list
         sorted_doc_ids = list(sorted_doc_ids)
 
         return sorted_doc_ids
     
     def get_query_docs_features(self, query_id, doclist, test_mode):
-
-        # if test_mode:
-        #     self.query_features = np.array(self.dictQueryRepresentation[query_id]).reshape(-1).tolist()
-        # else:
-        #     self.query_features = (np.array(self.dictQueryRepresentation[query_id]).reshape(-1) + np.random.normal(0, 0.0005, self.query_dims)).tolist()
-
-        # self.query_features = np.array(self.dictQueryRepresentation[query_id]).reshape(-1).tolist()
 
         self.query_features = self.dictQueryRepresentation[query_id]
 
@@ -109,7 +77,6 @@ class Search(MultiAgentEnv):
 
     def step(self, actions, query, doclist, t, test_mode, sparse_reward):
         """ Returns reward, terminated, info """
-        # # 此处还需再加代码，根据给出的信息得到排序列表，以便计算reward。函数的doclist只是暂时占位，后续需修改。
         # docList = self.get_can_doclist(actions)
         ranks = self.get_rank(actions.tolist(), doclist)
         if test_mode:
@@ -117,13 +84,14 @@ class Search(MultiAgentEnv):
             alpha_DCG_10 = self.alphaDCG(self.alpha, query, ranks, k=10)
             ERR_IA_5 = self.expected_reciprocal_rank(query, ranks, k=5)
             ERR_IA_10 = self.expected_reciprocal_rank(query, ranks, k=10)
+            S_recall_5 = self.subtopic_recall(query, ranks, k=5)
+            S_recall_10 = self.subtopic_recall(query, ranks, k=10)
         alpha_DCG = self.alphaDCG(self.alpha, query, ranks, k=self.train_dcg_n)
         alpha_DCG_add = self.alphaDCG(self.alpha, query, ranks, k=5)
 
         # print('------------------')
         # print('t: {}'.format(t))
 
-        # 得到所有ranks在理想排名中的位置（变向的score）
         ideal_scores = []
         for can_doc in doclist:
             ideal_scores.append(self.dictDCG[query][can_doc])
@@ -154,13 +122,13 @@ class Search(MultiAgentEnv):
             cur_alpha_NDCG = alpha_DCG / ideal_alpha_DCG
         else:
             cur_alpha_NDCG = 0
-        # if ideal_alpha_DCG_add != 0:
-        #     cur_alpha_NDCG_add = alpha_DCG_add / ideal_alpha_DCG_add
-        # else:
-        #     cur_alpha_NDCG_add = 0
+        if ideal_alpha_DCG_add != 0:
+            cur_alpha_NDCG_add = alpha_DCG_add / ideal_alpha_DCG_add
+        else:
+            cur_alpha_NDCG_add = 0
 
 
-        # reward设置
+        # reward setting
         # reward = cur_alpha_NDCG
         if t == 0:
             self.last_alpha_NDCG = cur_alpha_NDCG
@@ -169,7 +137,7 @@ class Search(MultiAgentEnv):
             reward = cur_alpha_NDCG - self.last_alpha_NDCG
             self.last_alpha_NDCG = cur_alpha_NDCG
         else:
-            reward = cur_alpha_NDCG# + cur_alpha_NDCG_add
+            reward = cur_alpha_NDCG + cur_alpha_NDCG_add
 
         if t >= self.episode_limit-1:
             terminated = True 
@@ -178,14 +146,14 @@ class Search(MultiAgentEnv):
 
         info = {}
 
-        # if sparse_reward:  # 稀疏奖励
-        #     if not terminated:  # 非终结step reward设为0
+        # if sparse_reward:  # sparse reward
+        #     if not terminated: 
         #         reward = 0
         # else:
         #     pass
 
         if test_mode:
-            return alpha_NDCG_5, alpha_NDCG_10, ERR_IA_5, ERR_IA_10, reward, terminated, info, ranks
+            return alpha_NDCG_5, alpha_NDCG_10, ERR_IA_5, ERR_IA_10, S_recall_5, S_recall_10, reward, terminated, info, ranks
         else:
             return reward, terminated, info, ranks
     
@@ -202,52 +170,34 @@ class Search(MultiAgentEnv):
     
     def get_obs_agent(self, doc_id, actions, time_step):
         """ Returns observation for agent_id """
-        # # # query + N docs + N actions + N ranks
-        # query_repr = np.array(self.dictQueryRepresentation[query_id]).reshape(-1)
-        # query_repr = np.array(self.query_features)
-        # doc_repr = np.array(self.dictDocumentRepresentation[doc_id]).reshape(-1)
-        # agent_obs = self.query_features + self.docs_features + actions
-        # dot_query_doc = query_repr * doc_repr
-
-        # 以下是加入att的
         doc_repr = self.dictDocumentRepresentation[doc_id]
         return self.query_features + self.docs_features + self.query_features + doc_repr
     
-        # # 以下是没有加入att的
-        # doc_repr = self.dictDocumentRepresentation[doc_id]
-        # return self.query_features + doc_repr
+    def reset(self, query, doclist, actions, test_mode, time_step):
+        """ Returns initial observations and states"""
+        self.steps = 0
+        self.get_query_docs_features(query, doclist, test_mode)
+        return self.get_obs(doclist, actions, time_step), self.get_state(actions, time_step)
+    
+    def get_obs(self, doclist, actions, time_step):
+        """Returns all agent observations in a list."""
+        agents_obs = [self.get_obs_agent(doclist[i], actions, time_step) for i in range(self.n_agents)]
+        return agents_obs
+    
+    def get_obs_agent(self, doc_id, actions, time_step):
+        """ Returns observation for agent_id """
+        doc_repr = self.dictDocumentRepresentation[doc_id]
+        return self.query_features + self.docs_features + self.query_features + doc_repr
 
     def get_obs_size(self):
         """ Returns the shape of the observation """
-        # # 以下是加入att的
-        # return self.state_size + self.obs_size + self.episode_limit  #  + self.n_agents * self.n_actions 
-
-        # 以下是没有加入att的
         return self.state_size + self.obs_size
     
     def get_state(self, actions, time_step):
-        # query_repr = np.array(self.dictQueryRepresentation[query_id]).reshape(-1).tolist()
-        # doc_repr_list = []
-        # for doc_id in can_doclist:
-        #     doc_repr = np.array(self.dictDocumentRepresentation[doc_id]).reshape(-1).tolist()
-        #     doc_repr_list.extend(doc_repr)
-        # state = query_repr + doc_repr_list
-
-        # # 以下是加入att的
-        # one_hot_t = [0] * self.episode_limit
-        # one_hot_t[time_step-1] = 1
-
-        # return self.query_docs_features + actions + one_hot_t
-
-        # 以下是没有加入att的
         return self.query_features + self.docs_features
 
     def get_state_size(self):
         """ Returns the shape of the state"""
-        # # 以下是加入att的
-        # return self.state_size + self.n_agents * self.n_actions + self.episode_limit
-        
-        # 以下是没有加入att的
         return self.state_size
 
     def get_avail_actions(self):
@@ -292,12 +242,11 @@ class Search(MultiAgentEnv):
             subtopics.append(0)
         for i in range(k):
             G = 0.0
-            if docList[i] not in self.dictQueryDocumentSubtopics[query]:  # 候选文档（216）中没有文档i，不计算。
-                # print('有subtopic标签的文档中，query.{}没有doc {}'.format(query, docList[i]))
+            if docList[i] not in self.dictQueryDocumentSubtopics[query]:  
                 continue
             listDocSubtopics = self.dictQueryDocumentSubtopics[query][docList[i]]  # ['1', '2', '3', '4']
             # print('subtopics: ', docList[i], listDocSubtopics)
-            if len(listDocSubtopics) == 0:  # 如果此文档不包含任何子话题，则对于i=k处的rank，G=0。
+            if len(listDocSubtopics) == 0:  
                     G = 0.0
             else:
                 for subtopic in listDocSubtopics:
@@ -345,3 +294,12 @@ class Search(MultiAgentEnv):
             err += 1.0 / (id_n+1) * all_topic
 
         return err
+
+    def subtopic_recall(self, query, docList, k):
+        n = self.query_subtopics[query]
+        subtopics_r = []
+        for d in docList[:k]:
+            if d in self.dictQueryDocumentSubtopics[query]:
+            # if self.dictQueryDocumentSubtopics[query].has_key(d):
+                subtopics_r.extend(self.dictQueryDocumentSubtopics[query][d])
+        return len(set(subtopics_r))*1.0 / n
